@@ -1,0 +1,21 @@
+# 認証情報
+.env
+.env.*
+*.key
+*.pem
+credentials.json
+
+# 機密データ
+secrets/
+private/
+
+# 顧客データ
+data/customers/
+data/users/
+
+# ログ（個人情報を含む可能性）
+logs/
+
+# バックアップ
+*.bak
+*.dump
