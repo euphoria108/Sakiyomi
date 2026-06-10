@@ -1,0 +1,15 @@
+{
+  "name": "sakiyomi",
+  "private": true,
+  "scripts": {
+    "dev:api": "pnpm -F @sakiyomi/api dev",
+    "dev:mobile": "pnpm -F @sakiyomi/mobile start"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
+}
