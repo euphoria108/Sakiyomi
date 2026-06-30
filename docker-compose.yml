@@ -1,0 +1,68 @@
+# Fully isolated local stack for the Sakiyomi API + local D1/KV (Miniflare).
+# Nothing touches Cloudflare's cloud; all state lives in named volumes (disposable with `down -v`).
+#
+#   make up    -> start api (+ feed-fixtures) at http://localhost:8787  (manual / frontend testing)
+#   make test  -> run integration tests against a fresh local API, exit non-zero on failure
+#   make clean -> stop and wipe all local state
+
+services:
+  # Serves fixture RSS so addFeed's outbound fetch is offline & deterministic.
+  feed-fixtures:
+    image: python:3-slim
+    command: ["python", "-m", "http.server", "80", "--directory", "/fixtures"]
+    volumes:
+      - ./workers/api/seed/fixtures:/fixtures:ro
+
+  # The Workers API running under `wrangler dev` (Miniflare): local D1 (SQLite) + local KV.
+  api:
+    build:
+      context: .
+      dockerfile: .docker/api.Dockerfile
+    ports:
+      - "8787:8787"
+    environment:
+      CI: "true"
+      WRANGLER_SEND_METRICS: "false"
+      # SEED defaults to true; override per-invocation if you want an empty DB.
+    volumes:
+      - ./:/workspace
+      # Container-only deps + state (shadow the host's darwin node_modules, keep host clean):
+      - nm_root:/workspace/node_modules
+      - nm_api:/workspace/workers/api/node_modules
+      - nm_shared:/workspace/packages/shared/node_modules
+      - wrangler_state:/workspace/workers/api/.wrangler
+    depends_on:
+      - feed-fixtures
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8787/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 60s
+
+  # Integration tests: hit the running API over HTTP. Enabled only via `--profile test`.
+  test:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: .docker/api.Dockerfile
+    entrypoint: ["sh", "-lc"]
+    command: ["pnpm -F @sakiyomi/api test:integration"]
+    environment:
+      API_BASE_URL: "http://api:8787"
+      FIXTURE_FEED_URL: "http://feed-fixtures/sample-feed.xml"
+      CI: "true"
+    volumes:
+      - ./:/workspace
+      - nm_root:/workspace/node_modules
+      - nm_api:/workspace/workers/api/node_modules
+      - nm_shared:/workspace/packages/shared/node_modules
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  nm_root:
+  nm_api:
+  nm_shared:
+  wrangler_state:

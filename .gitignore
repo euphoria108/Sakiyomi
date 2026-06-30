@@ -1,0 +1,20 @@
+node_modules/
+
+# local memo
+/memo
+
+# wrangler / Miniflare local state (local D1 + KV)
+**/.wrangler/
+
+# local secrets (never commit)
+**/.dev.vars
+
+# Expo local env
+.expo/
+apps/mobile/.env.local
+
+# Serena (local tool artifacts)
+.serena/
+
+# pnpm
+.pnpm-store/

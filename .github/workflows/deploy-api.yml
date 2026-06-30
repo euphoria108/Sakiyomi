@@ -24,6 +24,12 @@ jobs:
 
       - run: pnpm install
 
+      - name: Unit tests
+        run: pnpm -F @sakiyomi/api test
+
+      - name: Integration tests (local stack)
+        run: docker compose --profile test up --build --abort-on-container-exit --exit-code-from test
+
       - name: Run D1 migrations
         run: pnpm -F @sakiyomi/api db:migrate:remote
         env:

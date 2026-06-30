@@ -40,6 +40,16 @@ packages/shared/    # 共有型定義（フロント・バックエンド共用�
 pnpm install          # 依存関係インストール（ルートで実行）
 ```
 
+### ローカル統合テスト（Docker・ホストを汚さない）
+
+クラウド資源に触れず、ローカルで API + DB を起動・テストしてからデプロイする仕組み。詳細は [docs/local-dev.md](docs/local-dev.md)。
+
+```bash
+make up      # ローカル API を起動（http://localhost:8787、migrate+seed 自動）
+make test    # デプロイ前ゲート: 統合テストを実行
+make clean   # 依存・DB を含む全状態を破棄
+```
+
 ### API（Cloudflare Workers）
 
 ```bash
