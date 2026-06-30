@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { Context, Next } from 'hono';
 import { cors } from 'hono/cors';
 import { verify } from 'hono/jwt';
 import type { Env, Variables } from './types';
@@ -35,11 +36,11 @@ app.post('/push-token', async (c) => {
 
 app.get('/health', (c) => c.json({ ok: true }));
 
-async function authMiddleware(c: Parameters<Parameters<typeof app.use>[1]>[0], next: () => Promise<void>) {
+async function authMiddleware(c: Context<{ Bindings: Env; Variables: Variables }>, next: Next) {
   const auth = c.req.header('Authorization');
   if (!auth?.startsWith('Bearer ')) return c.json({ error: 'Unauthorized' }, 401);
   try {
-    const payload = await verify(auth.slice(7), c.env.JWT_SECRET) as { sub: string };
+    const payload = await verify(auth.slice(7), c.env.JWT_SECRET, 'HS256') as { sub: string };
     c.set('userId', payload.sub);
     await next();
   } catch {
