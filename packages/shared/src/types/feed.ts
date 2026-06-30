@@ -1,6 +1,5 @@
 export interface Feed {
   id: string;
-  userId: string;
   url: string;
   title: string;
   lastFetchedAt: number | null;

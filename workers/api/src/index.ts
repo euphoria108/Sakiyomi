@@ -8,6 +8,7 @@ import articleRoutes from './routes/articles';
 import { D1UserRepository } from './infrastructure/UserRepository';
 import { D1FeedRepository } from './infrastructure/FeedRepository';
 import { D1ArticleRepository } from './infrastructure/ArticleRepository';
+import { D1SubscriptionRepository } from './infrastructure/SubscriptionRepository';
 import { SyncUseCase } from './usecase/SyncUseCase';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -52,6 +53,7 @@ export default {
     const syncUseCase = new SyncUseCase(
       new D1FeedRepository(env.DB),
       new D1ArticleRepository(env.DB),
+      new D1SubscriptionRepository(env.DB),
       new D1UserRepository(env.DB)
     );
     await syncUseCase.syncAll();

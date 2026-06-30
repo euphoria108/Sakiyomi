@@ -1,36 +1,46 @@
-import type { IFeedRepository, IArticleRepository } from '../domain/repositories';
+import type { IFeedRepository, ISubscriptionRepository, IArticleRepository } from '../domain/repositories';
 import type { FeedEntity, ArticleEntity } from '../domain/entities';
 import { fetchAndParseFeed } from '../infrastructure/FeedParser';
 
 export class FeedUseCase {
   constructor(
     private feedRepo: IFeedRepository,
-    private articleRepo: IArticleRepository
+    private articleRepo: IArticleRepository,
+    private subscriptionRepo: ISubscriptionRepository
   ) {}
 
   async addFeed(userId: string, url: string): Promise<FeedEntity> {
-    const parsed = await fetchAndParseFeed(url);
+    // 同一 URL のフィードはグローバルに 1 件だけ存在する（find-or-create）
+    let feed = await this.feedRepo.findByUrl(url);
 
-    const feed: FeedEntity = {
-      id: crypto.randomUUID(),
-      userId,
-      url,
-      title: parsed.title || url,
-      lastFetchedAt: Date.now(),
-    };
-    await this.feedRepo.create(feed);
+    if (!feed) {
+      const parsed = await fetchAndParseFeed(url);
 
-    const articles: ArticleEntity[] = parsed.items.map((item) => ({
-      id: crypto.randomUUID(),
-      feedId: feed.id,
-      title: item.title,
-      url: item.url,
-      publishedAt: item.publishedAt,
-      isRead: false,
-    }));
-    for (const article of articles) {
-      await this.articleRepo.upsert(article);
+      feed = {
+        id: crypto.randomUUID(),
+        url,
+        title: parsed.title || url,
+        lastFetchedAt: Date.now(),
+      };
+      await this.feedRepo.create(feed);
+
+      const articles: ArticleEntity[] = parsed.items.map((item) => ({
+        id: crypto.randomUUID(),
+        feedId: feed!.id,
+        title: item.title,
+        url: item.url,
+        publishedAt: item.publishedAt,
+      }));
+      for (const article of articles) {
+        await this.articleRepo.upsert(article);
+      }
     }
+
+    await this.subscriptionRepo.subscribe({
+      userId,
+      feedId: feed.id,
+      createdAt: Date.now(),
+    });
 
     return feed;
   }
@@ -40,6 +50,6 @@ export class FeedUseCase {
   }
 
   async deleteFeed(feedId: string, userId: string): Promise<void> {
-    await this.feedRepo.delete(feedId, userId);
+    await this.subscriptionRepo.unsubscribe(userId, feedId);
   }
 }

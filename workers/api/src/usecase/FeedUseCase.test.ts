@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FeedUseCase } from './FeedUseCase';
-import type { IFeedRepository, IArticleRepository } from '../domain/repositories';
+import type { IFeedRepository, IArticleRepository, ISubscriptionRepository } from '../domain/repositories';
 import type { FeedEntity } from '../domain/entities';
 
 vi.mock('../infrastructure/FeedParser');
@@ -12,8 +12,8 @@ function makeFeedRepo() {
   return {
     findByUserId: vi.fn<IFeedRepository['findByUserId']>().mockResolvedValue([]),
     findById: vi.fn<IFeedRepository['findById']>().mockResolvedValue(null),
+    findByUrl: vi.fn<IFeedRepository['findByUrl']>().mockResolvedValue(null),
     create: vi.fn<IFeedRepository['create']>().mockResolvedValue(undefined),
-    delete: vi.fn<IFeedRepository['delete']>().mockResolvedValue(undefined),
     updateLastFetchedAt: vi.fn<IFeedRepository['updateLastFetchedAt']>().mockResolvedValue(undefined),
     findAll: vi.fn<IFeedRepository['findAll']>().mockResolvedValue([]),
   };
@@ -29,21 +29,32 @@ function makeArticleRepo() {
   };
 }
 
+function makeSubscriptionRepo() {
+  return {
+    subscribe: vi.fn<ISubscriptionRepository['subscribe']>().mockResolvedValue(undefined),
+    unsubscribe: vi.fn<ISubscriptionRepository['unsubscribe']>().mockResolvedValue(undefined),
+    findUserIdsByFeedId: vi.fn<ISubscriptionRepository['findUserIdsByFeedId']>().mockResolvedValue([]),
+  };
+}
+
 describe('FeedUseCase', () => {
   let feedRepo: ReturnType<typeof makeFeedRepo>;
   let articleRepo: ReturnType<typeof makeArticleRepo>;
+  let subscriptionRepo: ReturnType<typeof makeSubscriptionRepo>;
   let useCase: FeedUseCase;
 
   beforeEach(() => {
     vi.clearAllMocks();
     feedRepo = makeFeedRepo();
     articleRepo = makeArticleRepo();
-    useCase = new FeedUseCase(feedRepo, articleRepo);
+    subscriptionRepo = makeSubscriptionRepo();
+    useCase = new FeedUseCase(feedRepo, articleRepo, subscriptionRepo);
   });
 
-  describe('addFeed', () => {
-    it('フィードと記事を作成して FeedEntity を返す', async () => {
+  describe('addFeed（新規フィード）', () => {
+    it('フィードと記事を作成し、購読を登録して FeedEntity を返す', async () => {
       const url = 'https://example.com/feed.rss';
+      feedRepo.findByUrl.mockResolvedValue(null);
       mockFetchAndParseFeed.mockResolvedValue({
         title: 'My Blog',
         items: [
@@ -55,18 +66,17 @@ describe('FeedUseCase', () => {
       const feed = await useCase.addFeed('user-1', url);
 
       expect(feedRepo.create).toHaveBeenCalledOnce();
-      expect(feedRepo.create).toHaveBeenCalledWith(expect.objectContaining({
-        userId: 'user-1',
-        url,
-        title: 'My Blog',
-      }));
+      expect(feedRepo.create).toHaveBeenCalledWith(expect.objectContaining({ url, title: 'My Blog' }));
       expect(articleRepo.upsert).toHaveBeenCalledTimes(2);
+      expect(subscriptionRepo.subscribe).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1', feedId: feed.id })
+      );
       expect(feed.title).toBe('My Blog');
-      expect(feed.userId).toBe('user-1');
     });
 
     it('タイトルが空文字の場合、URL をタイトルとして使う', async () => {
       const url = 'https://example.com/feed.rss';
+      feedRepo.findByUrl.mockResolvedValue(null);
       mockFetchAndParseFeed.mockResolvedValue({ title: '', items: [] });
 
       const feed = await useCase.addFeed('user-1', url);
@@ -78,6 +88,7 @@ describe('FeedUseCase', () => {
 
     it('記事の feedId が返された feed.id と一致する', async () => {
       const url = 'https://example.com/feed.rss';
+      feedRepo.findByUrl.mockResolvedValue(null);
       mockFetchAndParseFeed.mockResolvedValue({
         title: 'Blog',
         items: [{ title: 'Post', url: 'https://example.com/post', publishedAt: 1000 }],
@@ -90,10 +101,28 @@ describe('FeedUseCase', () => {
     });
   });
 
+  describe('addFeed（既存フィードの購読）', () => {
+    it('既存フィードはフェッチ・作成せず購読のみ追加する', async () => {
+      const url = 'https://example.com/feed.rss';
+      const existing: FeedEntity = { id: 'feed-1', url, title: 'Existing', lastFetchedAt: 100 };
+      feedRepo.findByUrl.mockResolvedValue(existing);
+
+      const feed = await useCase.addFeed('user-2', url);
+
+      expect(mockFetchAndParseFeed).not.toHaveBeenCalled();
+      expect(feedRepo.create).not.toHaveBeenCalled();
+      expect(articleRepo.upsert).not.toHaveBeenCalled();
+      expect(subscriptionRepo.subscribe).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-2', feedId: 'feed-1' })
+      );
+      expect(feed).toBe(existing);
+    });
+  });
+
   describe('getFeeds', () => {
     it('feedRepo.findByUserId に委譲してそのまま返す', async () => {
       const feeds: FeedEntity[] = [
-        { id: 'f1', userId: 'user-1', url: 'https://a.com', title: 'A', lastFetchedAt: null },
+        { id: 'f1', url: 'https://a.com', title: 'A', lastFetchedAt: null },
       ];
       feedRepo.findByUserId.mockResolvedValue(feeds);
 
@@ -105,10 +134,10 @@ describe('FeedUseCase', () => {
   });
 
   describe('deleteFeed', () => {
-    it('feedRepo.delete(feedId, userId) を呼ぶ', async () => {
+    it('subscriptionRepo.unsubscribe(userId, feedId) を呼ぶ', async () => {
       await useCase.deleteFeed('feed-1', 'user-1');
 
-      expect(feedRepo.delete).toHaveBeenCalledWith('feed-1', 'user-1');
+      expect(subscriptionRepo.unsubscribe).toHaveBeenCalledWith('user-1', 'feed-1');
     });
   });
 });

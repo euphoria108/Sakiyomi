@@ -8,10 +8,15 @@ export interface UserEntity {
 
 export interface FeedEntity {
   id: string;
-  userId: string;
   url: string;
   title: string;
   lastFetchedAt: number | null;
+}
+
+export interface SubscriptionEntity {
+  userId: string;
+  feedId: string;
+  createdAt: number;
 }
 
 export interface ArticleEntity {
@@ -20,5 +25,4 @@ export interface ArticleEntity {
   title: string;
   url: string;
   publishedAt: number;
-  isRead: boolean;
 }

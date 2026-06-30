@@ -24,9 +24,10 @@ articles.get('/', async (c) => {
 });
 
 articles.patch('/:id/read', async (c) => {
+  const userId = c.get('userId');
   const articleId = c.req.param('id');
   const useCase = new ArticleUseCase(new D1ArticleRepository(c.env.DB));
-  await useCase.markRead(articleId);
+  await useCase.markRead(userId, articleId);
   return c.body(null, 204);
 });
 

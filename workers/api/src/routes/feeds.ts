@@ -3,12 +3,17 @@ import type { Env, Variables } from '../types';
 import { FeedUseCase } from '../usecase/FeedUseCase';
 import { D1FeedRepository } from '../infrastructure/FeedRepository';
 import { D1ArticleRepository } from '../infrastructure/ArticleRepository';
+import { D1SubscriptionRepository } from '../infrastructure/SubscriptionRepository';
 
 const feeds = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 feeds.get('/', async (c) => {
   const userId = c.get('userId');
-  const useCase = new FeedUseCase(new D1FeedRepository(c.env.DB), new D1ArticleRepository(c.env.DB));
+  const useCase = new FeedUseCase(
+    new D1FeedRepository(c.env.DB),
+    new D1ArticleRepository(c.env.DB),
+    new D1SubscriptionRepository(c.env.DB)
+  );
   const feedList = await useCase.getFeeds(userId);
   return c.json({ feeds: feedList });
 });
@@ -18,7 +23,11 @@ feeds.post('/', async (c) => {
   if (!url) return c.json({ error: 'url required' }, 400);
 
   const userId = c.get('userId');
-  const useCase = new FeedUseCase(new D1FeedRepository(c.env.DB), new D1ArticleRepository(c.env.DB));
+  const useCase = new FeedUseCase(
+    new D1FeedRepository(c.env.DB),
+    new D1ArticleRepository(c.env.DB),
+    new D1SubscriptionRepository(c.env.DB)
+  );
   try {
     const feed = await useCase.addFeed(userId, url);
     return c.json({ feed }, 201);
@@ -30,7 +39,11 @@ feeds.post('/', async (c) => {
 feeds.delete('/:id', async (c) => {
   const userId = c.get('userId');
   const feedId = c.req.param('id');
-  const useCase = new FeedUseCase(new D1FeedRepository(c.env.DB), new D1ArticleRepository(c.env.DB));
+  const useCase = new FeedUseCase(
+    new D1FeedRepository(c.env.DB),
+    new D1ArticleRepository(c.env.DB),
+    new D1SubscriptionRepository(c.env.DB)
+  );
   await useCase.deleteFeed(feedId, userId);
   return c.body(null, 204);
 });

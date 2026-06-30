@@ -1,4 +1,9 @@
-import type { IFeedRepository, IArticleRepository, IUserRepository } from '../domain/repositories';
+import type {
+  IFeedRepository,
+  IArticleRepository,
+  ISubscriptionRepository,
+  IUserRepository,
+} from '../domain/repositories';
 import type { ArticleEntity } from '../domain/entities';
 import { fetchAndParseFeed } from '../infrastructure/FeedParser';
 
@@ -6,6 +11,7 @@ export class SyncUseCase {
   constructor(
     private feedRepo: IFeedRepository,
     private articleRepo: IArticleRepository,
+    private subscriptionRepo: ISubscriptionRepository,
     private userRepo: IUserRepository
   ) {}
 
@@ -26,7 +32,6 @@ export class SyncUseCase {
             title: item.title,
             url: item.url,
             publishedAt: item.publishedAt,
-            isRead: false,
           }));
 
         for (const article of newArticles) {
@@ -36,9 +41,13 @@ export class SyncUseCase {
         await this.feedRepo.updateLastFetchedAt(feed.id, Date.now());
 
         if (newArticles.length > 0) {
-          const user = await this.userRepo.findById(feed.userId);
-          if (user?.pushToken) {
-            await sendPushNotification(user.pushToken, feed.title, `${newArticles.length} 件の新しい記事があります`);
+          const subscriberIds = await this.subscriptionRepo.findUserIdsByFeedId(feed.id);
+          const body = `${newArticles.length} 件の新しい記事があります`;
+          for (const userId of subscriberIds) {
+            const user = await this.userRepo.findById(userId);
+            if (user?.pushToken) {
+              await sendPushNotification(user.pushToken, feed.title, body);
+            }
           }
         }
       } catch {

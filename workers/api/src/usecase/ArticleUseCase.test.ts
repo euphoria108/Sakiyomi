@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ArticleUseCase } from './ArticleUseCase';
-import type { IArticleRepository } from '../domain/repositories';
-import type { ArticleEntity } from '../domain/entities';
+import type { IArticleRepository, ArticleWithReadState } from '../domain/repositories';
 
 function makeArticleRepo() {
   return {
@@ -13,7 +12,7 @@ function makeArticleRepo() {
   };
 }
 
-const baseArticle: ArticleEntity & { feedTitle: string } = {
+const baseArticle: ArticleWithReadState = {
   id: 'a1',
   feedId: 'f1',
   title: 'Post 1',
@@ -56,10 +55,10 @@ describe('ArticleUseCase', () => {
   });
 
   describe('markRead', () => {
-    it('articleRepo.markRead(articleId) を呼ぶ', async () => {
-      await useCase.markRead('article-1');
+    it('articleRepo.markRead(userId, articleId, readAt) を呼ぶ', async () => {
+      await useCase.markRead('user-1', 'article-1');
 
-      expect(articleRepo.markRead).toHaveBeenCalledWith('article-1');
+      expect(articleRepo.markRead).toHaveBeenCalledWith('user-1', 'article-1', expect.any(Number));
     });
   });
 });

@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SyncUseCase } from './SyncUseCase';
-import type { IFeedRepository, IArticleRepository, IUserRepository } from '../domain/repositories';
+import type {
+  IFeedRepository,
+  IArticleRepository,
+  ISubscriptionRepository,
+  IUserRepository,
+} from '../domain/repositories';
 import type { FeedEntity, UserEntity } from '../domain/entities';
 
 vi.mock('../infrastructure/FeedParser');
@@ -12,8 +17,8 @@ function makeFeedRepo() {
   return {
     findByUserId: vi.fn<IFeedRepository['findByUserId']>().mockResolvedValue([]),
     findById: vi.fn<IFeedRepository['findById']>().mockResolvedValue(null),
+    findByUrl: vi.fn<IFeedRepository['findByUrl']>().mockResolvedValue(null),
     create: vi.fn<IFeedRepository['create']>().mockResolvedValue(undefined),
-    delete: vi.fn<IFeedRepository['delete']>().mockResolvedValue(undefined),
     updateLastFetchedAt: vi.fn<IFeedRepository['updateLastFetchedAt']>().mockResolvedValue(undefined),
     findAll: vi.fn<IFeedRepository['findAll']>().mockResolvedValue([]),
   };
@@ -29,6 +34,14 @@ function makeArticleRepo() {
   };
 }
 
+function makeSubscriptionRepo() {
+  return {
+    subscribe: vi.fn<ISubscriptionRepository['subscribe']>().mockResolvedValue(undefined),
+    unsubscribe: vi.fn<ISubscriptionRepository['unsubscribe']>().mockResolvedValue(undefined),
+    findUserIdsByFeedId: vi.fn<ISubscriptionRepository['findUserIdsByFeedId']>().mockResolvedValue([]),
+  };
+}
+
 function makeUserRepo() {
   return {
     findById: vi.fn<IUserRepository['findById']>().mockResolvedValue(null),
@@ -40,7 +53,6 @@ function makeUserRepo() {
 
 const feed1: FeedEntity = {
   id: 'feed-1',
-  userId: 'user-1',
   url: 'https://example.com/feed.rss',
   title: 'Example Blog',
   lastFetchedAt: null,
@@ -62,6 +74,7 @@ const userWithoutToken: UserEntity = {
 describe('SyncUseCase', () => {
   let feedRepo: ReturnType<typeof makeFeedRepo>;
   let articleRepo: ReturnType<typeof makeArticleRepo>;
+  let subscriptionRepo: ReturnType<typeof makeSubscriptionRepo>;
   let userRepo: ReturnType<typeof makeUserRepo>;
   let useCase: SyncUseCase;
   let mockFetch: ReturnType<typeof vi.fn>;
@@ -72,8 +85,9 @@ describe('SyncUseCase', () => {
     vi.stubGlobal('fetch', mockFetch);
     feedRepo = makeFeedRepo();
     articleRepo = makeArticleRepo();
+    subscriptionRepo = makeSubscriptionRepo();
     userRepo = makeUserRepo();
-    useCase = new SyncUseCase(feedRepo, articleRepo, userRepo);
+    useCase = new SyncUseCase(feedRepo, articleRepo, subscriptionRepo, userRepo);
   });
 
   afterEach(() => {
@@ -99,7 +113,6 @@ describe('SyncUseCase', () => {
       ],
     });
     articleRepo.findExistingUrls.mockResolvedValue(['https://example.com/old']);
-    userRepo.findById.mockResolvedValue(userWithoutToken);
 
     await useCase.syncAll();
 
@@ -108,17 +121,19 @@ describe('SyncUseCase', () => {
     expect(feedRepo.updateLastFetchedAt).toHaveBeenCalledWith('feed-1', expect.any(Number));
   });
 
-  it('新記事あり + pushToken あり → Expo API に fetch が送られる', async () => {
+  it('新記事あり + 購読者に pushToken あり → 各購読者へ Expo API に fetch が送られる', async () => {
     feedRepo.findAll.mockResolvedValue([feed1]);
     mockFetchAndParseFeed.mockResolvedValue({
       title: 'Blog',
       items: [{ title: 'New Post', url: 'https://example.com/new', publishedAt: 2000 }],
     });
     articleRepo.findExistingUrls.mockResolvedValue([]);
+    subscriptionRepo.findUserIdsByFeedId.mockResolvedValue(['user-1']);
     userRepo.findById.mockResolvedValue(userWithToken);
 
     await useCase.syncAll();
 
+    expect(subscriptionRepo.findUserIdsByFeedId).toHaveBeenCalledWith('feed-1');
     expect(mockFetch).toHaveBeenCalledOnce();
     expect(mockFetch).toHaveBeenCalledWith(
       'https://exp.host/--/api/v2/push/send',
@@ -129,13 +144,33 @@ describe('SyncUseCase', () => {
     expect(body.title).toBe('Example Blog');
   });
 
-  it('pushToken が null の場合、fetch は呼ばれない', async () => {
+  it('複数購読者のうち pushToken のあるユーザーにのみ送信される', async () => {
     feedRepo.findAll.mockResolvedValue([feed1]);
     mockFetchAndParseFeed.mockResolvedValue({
       title: 'Blog',
       items: [{ title: 'New Post', url: 'https://example.com/new', publishedAt: 2000 }],
     });
     articleRepo.findExistingUrls.mockResolvedValue([]);
+    subscriptionRepo.findUserIdsByFeedId.mockResolvedValue(['user-1', 'user-2']);
+    userRepo.findById.mockImplementation((id) =>
+      Promise.resolve(id === 'user-1' ? userWithToken : { ...userWithoutToken, id: 'user-2' })
+    );
+
+    await useCase.syncAll();
+
+    expect(mockFetch).toHaveBeenCalledOnce();
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+    expect(body.to).toBe('ExponentPushToken[xxx]');
+  });
+
+  it('購読者の pushToken が null の場合、fetch は呼ばれない', async () => {
+    feedRepo.findAll.mockResolvedValue([feed1]);
+    mockFetchAndParseFeed.mockResolvedValue({
+      title: 'Blog',
+      items: [{ title: 'New Post', url: 'https://example.com/new', publishedAt: 2000 }],
+    });
+    articleRepo.findExistingUrls.mockResolvedValue([]);
+    subscriptionRepo.findUserIdsByFeedId.mockResolvedValue(['user-1']);
     userRepo.findById.mockResolvedValue(userWithoutToken);
 
     await useCase.syncAll();
@@ -143,7 +178,7 @@ describe('SyncUseCase', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('新記事が0件の場合、userRepo.findById も fetch も呼ばれない', async () => {
+  it('新記事が0件の場合、購読者の探索も fetch も行われない', async () => {
     feedRepo.findAll.mockResolvedValue([feed1]);
     mockFetchAndParseFeed.mockResolvedValue({
       title: 'Blog',
@@ -153,6 +188,7 @@ describe('SyncUseCase', () => {
 
     await useCase.syncAll();
 
+    expect(subscriptionRepo.findUserIdsByFeedId).not.toHaveBeenCalled();
     expect(userRepo.findById).not.toHaveBeenCalled();
     expect(mockFetch).not.toHaveBeenCalled();
   });
@@ -170,7 +206,7 @@ describe('SyncUseCase', () => {
       });
     });
     articleRepo.findExistingUrls.mockResolvedValue([]);
-    userRepo.findById.mockResolvedValue(userWithoutToken);
+    subscriptionRepo.findUserIdsByFeedId.mockResolvedValue([]);
 
     await expect(useCase.syncAll()).resolves.toBeUndefined();
 
