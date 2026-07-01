@@ -1,4 +1,4 @@
-import { Stack, Redirect } from 'expo-router';
+import { Stack } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '../src/presentation/components/AuthContext';
 
@@ -17,11 +17,14 @@ export default function RootLayout() {
 function RootNavigator() {
   const { token, isLoading } = useAuth();
   if (isLoading) return null;
-  if (!token) return <Redirect href="/(auth)/login" />;
   return (
     <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Protected guard={!!token}>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      </Stack.Protected>
+      <Stack.Protected guard={!token}>
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      </Stack.Protected>
     </Stack>
   );
 }
