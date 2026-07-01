@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Sakiyomi Fixture Feed</title>
+    <link>http://feed-fixtures/sample-feed.xml</link>
+    <description>Local fixture RSS feed served by the feed-fixtures container (offline, deterministic).</description>
+    <item>
+      <title>Fixture Article One</title>
+      <link>https://fixture.example.com/posts/one</link>
+      <pubDate>Mon, 01 Jan 2024 09:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Fixture Article Two</title>
+      <link>https://fixture.example.com/posts/two</link>
+      <pubDate>Tue, 02 Jan 2024 09:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Fixture Article Three</title>
+      <link>https://fixture.example.com/posts/three</link>
+      <pubDate>Wed, 03 Jan 2024 09:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

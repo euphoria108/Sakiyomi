@@ -1,0 +1,4 @@
+# Local-only secrets for `wrangler dev` (Miniflare).
+# Copy to `.dev.vars` (gitignored). The Docker entrypoint auto-copies this if missing.
+# NEVER use this value in production — set the real one with `wrangler secret put JWT_SECRET`.
+JWT_SECRET=local-dev-secret-change-me

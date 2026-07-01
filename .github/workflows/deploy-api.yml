@@ -1,0 +1,41 @@
+name: Deploy API to Cloudflare Workers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'workers/api/**'
+      - 'packages/shared/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install
+
+      - name: Unit tests
+        run: pnpm -F @sakiyomi/api test
+
+      - name: Integration tests (local stack)
+        run: docker compose --profile test up --build --abort-on-container-exit --exit-code-from test
+
+      - name: Run D1 migrations
+        run: pnpm -F @sakiyomi/api db:migrate:remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Deploy to Cloudflare Workers
+        run: pnpm -F @sakiyomi/api deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

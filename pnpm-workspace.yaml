@@ -1,0 +1,13 @@
+# Expo/Metro は未宣言依存 (metro-runtime 等) をフラットな node_modules から
+# 解決するため、hoisted リンカーが必須。pnpm v10+ ではこの設定を
+# pnpm-workspace.yaml に記述する。
+nodeLinker: hoisted
+
+packages:
+  - 'apps/*'
+  - 'packages/*'
+  - 'workers/*'
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true

@@ -1,0 +1,20 @@
+{
+  "name": "sakiyomi",
+  "private": true,
+  "scripts": {
+    "dev:api": "pnpm -F @sakiyomi/api dev",
+    "dev:mobile": "pnpm -F @sakiyomi/mobile start",
+    "test:api": "pnpm -F @sakiyomi/api test",
+    "docker:up": "docker compose up --build api feed-fixtures",
+    "docker:down": "docker compose down",
+    "docker:test": "docker compose --profile test up --build --abort-on-container-exit --exit-code-from test",
+    "docker:clean": "docker compose --profile test down -v"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
+}

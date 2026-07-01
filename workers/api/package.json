@@ -1,0 +1,26 @@
+{
+  "name": "@sakiyomi/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "db:seed:local": "wrangler d1 execute sakiyomi-db --local --file=./seed/seed.sql",
+    "db:migrate:local": "wrangler d1 migrations apply sakiyomi-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply sakiyomi-db"
+  },
+  "dependencies": {
+    "@sakiyomi/shared": "workspace:*",
+    "hono": "^4.4.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240620.0",
+    "typescript": "^5.4.5",
+    "vitest": "^2.0.0",
+    "wrangler": "^3.60.0"
+  }
+}

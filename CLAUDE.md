@@ -6,42 +6,69 @@
 
 **Sakiyomi** は feedly ライクな個人用フィードリーダーアプリケーションです。ブログの RSS/Atom フィードをフォローすると、アプリ上でフォロー済みブログの記事を一覧できます。フォロー中のブログが更新されるとモバイルアプリでプッシュ通知を受け取れます。
 
-## プロジェクトステータス
-
-このプロジェクトは単一のコミットで初期化され、コア開発の開始を待っています。初期アーキテクチャを追加する際は以下のことを行ってください：
-- Expo を使ったマルチプラットフォーム（web / iOS / Android）構成を前提に設計する
-- 選択後、このファイルにスタックを記載する
-- ビルド、テスト、リントツールを早期にセットアップする
-
 ## リポジトリ構成
 
-モノレポ構成。
+pnpm workspaces によるモノレポ。
+
+```
+apps/mobile/        # Expo アプリ（Expo Router）
+workers/api/        # Cloudflare Workers API（Hono）
+packages/shared/    # 共有型定義（フロント・バックエンド共用）
+```
 
 ## 技術スタック
 
 | 領域 | 技術 |
 |---|---|
-| アプリ | Expo（web / iOS / Android 対応） |
-| ホスティング | Cloudflare（CI 経由で自動デプロイ予定） |
+| アプリ | Expo v56 + Expo Router v5（web / iOS / Android） |
+| バックエンド | Cloudflare Workers + Hono |
+| DB | Cloudflare D1（SQLite） |
+| キャッシュ | Cloudflare KV |
+| 状態管理 | TanStack Query |
+| ホスティング | Cloudflare（GitHub Actions で自動デプロイ） |
 
 ## GitHub 開発ルール
 
-- **feature ブランチ運用**: 作業は必ず feature ブランチを作成して行う
-- **PR 経由でマージ**: main ブランチへのマージは PR を作成してから行う
-- **main への直接コミット禁止**: main ブランチに直接コミットしない
+- **デフォルトブランチは `develop`**: 開発の起点は `develop` ブランチ
+- **feature ブランチ運用**: 作業は `develop` から feature ブランチを作成して行う
+- **PR のマージ先は `develop`**: feature ブランチの PR は `develop` にマージする
+- **main への直接コミット禁止**: `main` ブランチに直接コミットしない
 
 ## 開発セットアップ
 
-_プロジェクトインフラが追加されると、入力されます。_
+```bash
+pnpm install          # 依存関係インストール（ルートで実行）
+```
 
-### ビルド
-_プロジェクト構造が確立されたら、ビルドコマンドを追加してください。_
+### ローカル統合テスト（Docker・ホストを汚さない）
 
-### テスト
-_テストスイートがセットアップされたら、テストコマンドを追加してください。_
+クラウド資源に触れず、ローカルで API + DB を起動・テストしてからデプロイする仕組み。詳細は [docs/local-dev.md](docs/local-dev.md)。
 
-### リント / フォーマット
-_ツールが設定されたら、リントおよびフォーマットコマンドを追加してください。_
+```bash
+make up      # ローカル API を起動（http://localhost:8787、migrate+seed 自動）
+make test    # デプロイ前ゲート: 統合テストを実行
+make clean   # 依存・DB を含む全状態を破棄
+```
+
+### API（Cloudflare Workers）
+
+```bash
+pnpm dev:api                              # ローカル開発サーバー起動（wrangler dev）
+pnpm -F @sakiyomi/api db:migrate:local    # D1 マイグレーション（ローカル）
+pnpm -F @sakiyomi/api typecheck           # 型チェック
+```
+
+`wrangler.toml` の `database_id` と `kv_namespaces.id` は実際のリソース ID に書き換えること。
+`JWT_SECRET` は `wrangler secret put JWT_SECRET` で設定する。
+
+### モバイルアプリ（Expo）
+
+```bash
+pnpm dev:mobile                             # Expo 開発サーバー起動
+pnpm -F @sakiyomi/mobile typecheck          # 型チェック
+```
+
+`EXPO_PUBLIC_API_URL` を `.env.local` に設定して API エンドポイントを指定する。
 
 ## アーキテクチャ
 
@@ -49,13 +76,8 @@ _ツールが設定されたら、リントおよびフォーマットコマン�
 
 - **Domain 層**: エンティティとビジネスルール。外部依存なし
 - **UseCase 層**: アプリケーション固有のビジネスロジック。Domain 層にのみ依存
-- **Interface 層**: リポジトリ実装、外部 API アダプター
+- **Interface 層**: リポジトリ実装、外部 API アダプター（`infrastructure/` ディレクトリ）
 - **Presentation 層**: Expo コンポーネント、画面、状態管理
 
-## 重要な設計決定
-
-_それらが作成されるにつれて記録されます。_
-
-## よくある開発タスク
-
-_パターンが現れるにつれてドキュメント化されます。_
+バックエンドの定期フィード同期は Cloudflare Cron Trigger（30 分毎）で `SyncUseCase` を実行する。
+新記事があれば Expo Push Notification Service 経由でプッシュ通知を送信する。

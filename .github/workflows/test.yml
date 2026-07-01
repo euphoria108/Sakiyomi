@@ -1,0 +1,38 @@
+name: Test API
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'workers/api/**'
+      - 'packages/shared/**'
+      - 'docker-compose.yml'
+      - '.docker/**'
+  push:
+    branches: [develop]
+    paths:
+      - 'workers/api/**'
+      - 'packages/shared/**'
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm -F @sakiyomi/api test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Reuses the exact same local stack as `make test` (api + local D1/KV + fixtures).
+      - name: Run integration tests in the local Docker stack
+        run: docker compose --profile test up --build --abort-on-container-exit --exit-code-from test
